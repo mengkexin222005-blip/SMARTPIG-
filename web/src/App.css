@@ -2962,18 +2962,3 @@ details.advanced:not([open]) { gap: 0; }
 .chart-fill-top { stop-color: var(--series); stop-opacity: 0.28; }
 .chart-fill-bottom { stop-color: var(--series); stop-opacity: 0; }
 :root[data-theme="dark"] .chart-fill-top { stop-opacity: 0.35; }
-
-
-/* ============ ESP32 clock card (Overview) ============ */
-.metric-ico-clock { background: #e8eefc; color: #3b5bb5; }
-:root[data-theme="dark"] .metric-ico-clock { background: #1f2a45; color: #9db4f0; }
-.clock-body { display: flex; flex-direction: column; gap: 4px; }
-.clock-time { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.clock-date { font-size: 1.05rem; font-weight: 600; }
-@media (min-width: 640px) {
-  .grid-3 > .metric-clock { grid-column: span 2; }
-}
-.sched-date { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; }
-.reg-times { display: flex; flex-wrap: wrap; gap: 10px; }
-.reg-time { display: inline-flex; align-items: center; gap: 8px; }
-.reg-time .sched-time-input { min-width: 0; }

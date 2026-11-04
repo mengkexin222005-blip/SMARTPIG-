@@ -192,24 +192,8 @@ const SLOT_INFO = {
   pm: { label: "feed.pm" },
 };
 
-// Date of the next time this "HH:MM" comes round (Philippine time): today, or tomorrow if it has passed
-function nextRunDate(hhmm, nowMs, lang) {
-  const m = /^(\d{2}):(\d{2})$/.exec(hhmm || "");
-  if (!m || !nowMs) return null;
-  const local = new Date(nowMs + 8 * 3600000);            // Manila = UTC+8, no daylight saving
-  const nowMin = local.getUTCHours() * 60 + local.getUTCMinutes();
-  const slotMin = Number(m[1]) * 60 + Number(m[2]);
-  const tomorrow = slotMin <= nowMin;
-  const dayMs = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + (tomorrow ? 1 : 0), 12);
-  const label = new Intl.DateTimeFormat(lang === "tl" ? "fil-PH" : "en-US", {
-    weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
-  }).format(new Date(dayMs));
-  return { label, tomorrow };
-}
-
-function ScheduleRow({ id, slot, grams, canEdit, busy, onSave, serverNow }) {
-  const { t, lang } = useSettings();
-  const runDate = slot.enabled ? nextRunDate(slot.time, serverNow, lang) : null;
+function ScheduleRow({ id, slot, grams, canEdit, busy, onSave }) {
+  const { t } = useSettings();
   const [editing, setEditing] = useState(false);
   const info = SLOT_INFO[id];
   const [time, setTime] = useState(slot.time);
@@ -260,12 +244,6 @@ function ScheduleRow({ id, slot, grams, canEdit, busy, onSave, serverNow }) {
           <span className="sched-time-line">
             <span className="slot-time">{formatHHMM(slot.time)}</span>
             <span className="slot-grams">{grams !== null ? formatMass(grams) : t("feed.noAmount")}</span>
-          </span>
-        )}
-        {!editing && runDate && (
-          <span className="sched-date subtle small-note">
-            <Icon name="clock" size={14} />
-            {t(runDate.tomorrow ? "feed.nextTomorrow" : "feed.nextToday", { date: runDate.label })}
           </span>
         )}
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -356,7 +334,6 @@ function Schedule({ schedule, plan, slots, synced, canEdit, settings, serverNow 
             canEdit={canEdit}
             busy={busy}
             onSave={saveSlot}
-            serverNow={serverNow}
           />
         ))}
       </ul>
@@ -394,9 +371,6 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
   const { t } = useSettings();
   const [age, setAge] = useState("");
   const [count, setCount] = useState(1);
-  // Feeding times are set together with the pigs (still editable later in Feeding schedule)
-  const [amTime, setAmTime] = useState(schedule?.am?.time || "07:00");
-  const [pmTime, setPmTime] = useState(schedule?.pm?.time || "17:00");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -406,9 +380,6 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
   const disabled = !canEdit || locked || confirming;
   const ageN = Math.round(Number(age));
   const validAge = age !== "" && Number.isFinite(ageN) && ageN >= MIN_AGE_DAYS && ageN <= MAX_AGE_DAYS;
-  const amMin = /^\d{2}:\d{2}$/.test(amTime) ? toMinutes(amTime) : null;
-  const pmMin = /^\d{2}:\d{2}$/.test(pmTime) ? toMinutes(pmTime) : null;
-  const validTimes = amMin !== null && pmMin !== null && amMin < 720 && pmMin >= 720;
   const today = manilaDate(Date.now());
   const preview = validAge && !locked ? penPlan({ count, ageDays: ageN, registeredDate: today }, Date.now()) : null;
 
@@ -420,13 +391,7 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
     setBusy(true);
     setError("");
     try {
-      await registerPen({
-        count,
-        ageDays: ageN,
-        uid,
-        registeredDate: today,
-        schedule: { am: { time: amTime, enabled: true }, pm: { time: pmTime, enabled: true } },
-      });
+      await registerPen({ count, ageDays: ageN, uid, registeredDate: today, schedule });
       setConfirming(false);
       setAge("");
       setMsg(t("reg.done"));
@@ -492,38 +457,6 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
         <span className="subtle small-note">{t("reg.countHint", { max: MAX_PIGS })}</span>
       </div>
 
-      <div className="field">
-        <span className="field-label">{t("reg.schedTitle")}</span>
-        <div className="reg-times">
-          <label className="reg-time">
-            <span className="sched-badge sched-am">AM</span>
-            <input
-              type="time"
-              step="60"
-              className="sched-time-input"
-              value={locked ? schedule?.am?.time || "" : amTime}
-              disabled={disabled}
-              aria-label={t("feed.am")}
-              onChange={(e) => { setAmTime(e.target.value); setMsg(""); }}
-            />
-          </label>
-          <label className="reg-time">
-            <span className="sched-badge sched-pm">PM</span>
-            <input
-              type="time"
-              step="60"
-              className="sched-time-input"
-              value={locked ? schedule?.pm?.time || "" : pmTime}
-              disabled={disabled}
-              aria-label={t("feed.pm")}
-              onChange={(e) => { setPmTime(e.target.value); setMsg(""); }}
-            />
-          </label>
-        </div>
-        <span className="subtle small-note">{t("reg.schedHint")}</span>
-        {!locked && !validTimes && <p className="form-warn">{t("reg.badTimes")}</p>}
-      </div>
-
       {!locked && age !== "" && !validAge && (
         <p className="form-warn">{t("reg.ageHint", { min: MIN_AGE_DAYS, max: MAX_AGE_DAYS })}</p>
       )}
@@ -543,7 +476,6 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
       ) : confirming ? (
         <div className="confirm-box">
           <strong>{t("reg.confirm", { n: count, age: ageN })}</strong>
-          <span>{t("reg.confirmSched", { am: formatHHMM(amTime), pm: formatHHMM(pmTime) })}</span>
           <span className="subtle">{t("reg.confirmText")}</span>
           <div className="form-actions">
             <button type="button" className="btn btn-ghost" onClick={() => setConfirming(false)}>
@@ -559,7 +491,7 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
         <button
           type="button"
           className="btn btn-primary btn-big"
-          disabled={locked || !validAge || !validTimes}
+          disabled={locked || !validAge}
           onClick={() => setConfirming(true)}
         >
           <Icon name="plus" size={18} />
