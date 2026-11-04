@@ -192,8 +192,24 @@ const SLOT_INFO = {
   pm: { label: "feed.pm" },
 };
 
-function ScheduleRow({ id, slot, grams, canEdit, busy, onSave }) {
-  const { t } = useSettings();
+// Date of the next time this "HH:MM" comes round (Philippine time): today, or tomorrow if it has passed
+function nextRunDate(hhmm, nowMs, lang) {
+  const m = /^(\d{2}):(\d{2})$/.exec(hhmm || "");
+  if (!m || !nowMs) return null;
+  const local = new Date(nowMs + 8 * 3600000);            // Manila = UTC+8, no daylight saving
+  const nowMin = local.getUTCHours() * 60 + local.getUTCMinutes();
+  const slotMin = Number(m[1]) * 60 + Number(m[2]);
+  const tomorrow = slotMin <= nowMin;
+  const dayMs = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + (tomorrow ? 1 : 0), 12);
+  const label = new Intl.DateTimeFormat(lang === "tl" ? "fil-PH" : "en-US", {
+    weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+  }).format(new Date(dayMs));
+  return { label, tomorrow };
+}
+
+function ScheduleRow({ id, slot, grams, canEdit, busy, onSave, serverNow }) {
+  const { t, lang } = useSettings();
+  const runDate = slot.enabled ? nextRunDate(slot.time, serverNow, lang) : null;
   const [editing, setEditing] = useState(false);
   const info = SLOT_INFO[id];
   const [time, setTime] = useState(slot.time);
@@ -244,6 +260,12 @@ function ScheduleRow({ id, slot, grams, canEdit, busy, onSave }) {
           <span className="sched-time-line">
             <span className="slot-time">{formatHHMM(slot.time)}</span>
             <span className="slot-grams">{grams !== null ? formatMass(grams) : t("feed.noAmount")}</span>
+          </span>
+        )}
+        {!editing && runDate && (
+          <span className="sched-date subtle small-note">
+            <Icon name="clock" size={14} />
+            {t(runDate.tomorrow ? "feed.nextTomorrow" : "feed.nextToday", { date: runDate.label })}
           </span>
         )}
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -334,6 +356,7 @@ function Schedule({ schedule, plan, slots, synced, canEdit, settings, serverNow 
             canEdit={canEdit}
             busy={busy}
             onSave={saveSlot}
+            serverNow={serverNow}
           />
         ))}
       </ul>

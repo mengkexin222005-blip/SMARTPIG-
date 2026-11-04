@@ -765,11 +765,24 @@ void loop() {
   if (rtcValidNow(now)) {
     uint32_t dayIdx = now.unixtime() / 86400UL;
     int mins = now.hour() * 60 + now.minute();
+    // If the clock was once set to a later date, the saved "last meal" would block every meal until
+    // that date comes. Anything more than a day ahead of today is treated as wrong and cleared.
+    if (S.lastMealKey > (int32_t)dayIdx * 2 + 1) {
+      Serial.println("[feed] Saved last-meal date is in the future (clock was changed): cleared.");
+      S.lastMealKey = -1; saveState();
+    }
+    static int32_t skipNoted = -1;
     for (int i = 0; i < 2; i++) {
       if (!cfg.slotOn[i]) continue;                       // website: AM / PM switch
       int sched = S.mealH[i] * 60 + S.mealM[i];
       int32_t key = (int32_t)dayIdx * 2 + i;
-      if (S.enabled && mins >= sched && mins < sched + MEAL_WINDOW_MIN && key > S.lastMealKey) runMeal(i, key, false);
+      bool due = mins >= sched && mins < sched + MEAL_WINDOW_MIN && key > S.lastMealKey;
+      if (due && S.enabled) runMeal(i, key, false);
+      else if (due && skipNoted != key) {                 // say once why a meal time was skipped
+        skipNoted = key;
+        Serial.printf("[feed] %s %02d:%02d skipped: no pigs registered on the website.\n",
+                      i == 0 ? "AM" : "PM", S.mealH[i], S.mealM[i]);
+      }
     }
   }
 

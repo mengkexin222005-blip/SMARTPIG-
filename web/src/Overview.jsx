@@ -169,12 +169,19 @@ export default function Overview({ device, name, onOpenFeeding }) {
   const { slots, settings, pen } = useFeedingConfig();
   const L = climateLimits(settings);
   const { rows: feedLog } = useFeedLog(1);
-  const { rows } = useHistory();
   const { rows: longRows, hasLoaded: histLoaded } = useHistory(CLIMATE_RECORDS);
   const {
     status, tone, isStale, lastUpdated, ageMs, hasLoaded,
     temperature, humidity, waterLevel, alerts,
   } = device;
+
+  // ESP32 clock: how far it is from the real (server) time when the reading was written
+  const rtc = device.rtc;
+  const rtcDriftMin =
+    rtc && lastUpdated !== null ? Math.round(Math.abs(rtc.ms - lastUpdated) / 60000) : null;
+  const rtcWeekday = rtc
+    ? new Intl.DateTimeFormat(lang === "tl" ? "fil-PH" : "en-US", { weekday: "long", timeZone: "Asia/Manila" }).format(new Date(rtc.ms))
+    : "";
 
   const segments = tankSegments(waterLevel);
   const waterHint = WATER_HINT[String(waterLevel || "").toUpperCase()] || null;
@@ -248,49 +255,35 @@ export default function Overview({ device, name, onOpenFeeding }) {
 
       {/* Main readings */}
       <div className="grid-3">
-        <section className={`card metric metric-temp ${isStale ? "is-old" : ""} ${noLive ? "no-live" : ""}`}>
-          <MetricHead
-            icon="temp" kind="temp" label={t("ov.temperature")} t={t}
-            stale={isStale && temperature !== null} noLive={noLive}
-            state={tempState(temperature, L)}
-          />
+        {/* ESP32 clock (DS3231 RTC) - the time the feeder uses for the schedule */}
+        <section className={`card metric metric-clock ${isStale ? "is-old" : ""} ${noLive ? "no-live" : ""}`}>
+          <div className="metric-head">
+            <span className="metric-ico metric-ico-clock"><Icon name="clock" size={18} /></span>
+            <span className="metric-name">{t("ov.rtcTitle")}</span>
+            {noLive ? (
+              <span className="state-chip state-bad">{t("ov.offlineChip")}</span>
+            ) : isStale && rtc ? (
+              <span className="state-chip state-old">{t("ov.lastReading")}</span>
+            ) : rtcDriftMin === null ? (
+              hasLoaded && !rtc ? <span className="state-chip state-bad">{t("ov.rtcNone")}</span> : null
+            ) : rtcDriftMin <= 2 ? (
+              <span className="state-chip state-ok">{t("ov.rtcInSync")}</span>
+            ) : (
+              <span className="state-chip state-warn">{t("ov.rtcOff", { m: rtcDriftMin })}</span>
+            )}
+          </div>
           {loading ? (
             <Skeleton />
           ) : noLive ? (
-            <NoLive last={temperature !== null ? `${temperature.toFixed(1)} °C` : null} age={lastAge} t={t} />
-          ) : temperature !== null ? (
-            <span className="value" key={temperature}>
-              {temperature.toFixed(1)}
-              <span className="unit">°C</span>
-            </span>
+            <NoLive last={rtc ? `${rtc.date} ${rtc.time}` : null} age={lastAge} t={t} />
+          ) : rtc ? (
+            <div className="clock-body">
+              <span className="value clock-time" aria-live="off">{rtc.time}</span>
+              <span className="clock-date">{rtcWeekday ? `${rtcWeekday}, ` : ""}{rtc.date}</span>
+              <span className="subtle small-note">{t("ov.rtcSub")}</span>
+            </div>
           ) : (
             <span className="value muted">{t("ov.noData")}</span>
-          )}
-          {!noLive && (
-            <Trend rows={rows} field="temperature" unit="°C" tone="temp" lang={lang} t={t} current={temperature} limits={tempLimits(L, t)} />
-          )}
-        </section>
-
-        <section className={`card metric metric-hum ${isStale ? "is-old" : ""} ${noLive ? "no-live" : ""}`}>
-          <MetricHead
-            icon="drop" kind="hum" label={t("ov.humidity")} t={t}
-            stale={isStale && humidity !== null} noLive={noLive}
-            state={humState(humidity, L)}
-          />
-          {loading ? (
-            <Skeleton />
-          ) : noLive ? (
-            <NoLive last={humidity !== null ? `${humidity.toFixed(1)} %` : null} age={lastAge} t={t} />
-          ) : humidity !== null ? (
-            <span className="value" key={humidity}>
-              {humidity.toFixed(1)}
-              <span className="unit">%</span>
-            </span>
-          ) : (
-            <span className="value muted">{t("ov.noData")}</span>
-          )}
-          {!noLive && (
-            <Trend rows={rows} field="humidity" unit="%" tone="hum" lang={lang} t={t} current={humidity} limits={humLimits(L, t)} />
           )}
         </section>
 
