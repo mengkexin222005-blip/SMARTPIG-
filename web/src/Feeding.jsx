@@ -394,6 +394,9 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
   const { t } = useSettings();
   const [age, setAge] = useState("");
   const [count, setCount] = useState(1);
+  // Feeding times are set together with the pigs (still editable later in Feeding schedule)
+  const [amTime, setAmTime] = useState(schedule?.am?.time || "07:00");
+  const [pmTime, setPmTime] = useState(schedule?.pm?.time || "17:00");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -403,6 +406,9 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
   const disabled = !canEdit || locked || confirming;
   const ageN = Math.round(Number(age));
   const validAge = age !== "" && Number.isFinite(ageN) && ageN >= MIN_AGE_DAYS && ageN <= MAX_AGE_DAYS;
+  const amMin = /^\d{2}:\d{2}$/.test(amTime) ? toMinutes(amTime) : null;
+  const pmMin = /^\d{2}:\d{2}$/.test(pmTime) ? toMinutes(pmTime) : null;
+  const validTimes = amMin !== null && pmMin !== null && amMin < 720 && pmMin >= 720;
   const today = manilaDate(Date.now());
   const preview = validAge && !locked ? penPlan({ count, ageDays: ageN, registeredDate: today }, Date.now()) : null;
 
@@ -414,7 +420,13 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
     setBusy(true);
     setError("");
     try {
-      await registerPen({ count, ageDays: ageN, uid, registeredDate: today, schedule });
+      await registerPen({
+        count,
+        ageDays: ageN,
+        uid,
+        registeredDate: today,
+        schedule: { am: { time: amTime, enabled: true }, pm: { time: pmTime, enabled: true } },
+      });
       setConfirming(false);
       setAge("");
       setMsg(t("reg.done"));
@@ -480,6 +492,38 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
         <span className="subtle small-note">{t("reg.countHint", { max: MAX_PIGS })}</span>
       </div>
 
+      <div className="field">
+        <span className="field-label">{t("reg.schedTitle")}</span>
+        <div className="reg-times">
+          <label className="reg-time">
+            <span className="sched-badge sched-am">AM</span>
+            <input
+              type="time"
+              step="60"
+              className="sched-time-input"
+              value={locked ? schedule?.am?.time || "" : amTime}
+              disabled={disabled}
+              aria-label={t("feed.am")}
+              onChange={(e) => { setAmTime(e.target.value); setMsg(""); }}
+            />
+          </label>
+          <label className="reg-time">
+            <span className="sched-badge sched-pm">PM</span>
+            <input
+              type="time"
+              step="60"
+              className="sched-time-input"
+              value={locked ? schedule?.pm?.time || "" : pmTime}
+              disabled={disabled}
+              aria-label={t("feed.pm")}
+              onChange={(e) => { setPmTime(e.target.value); setMsg(""); }}
+            />
+          </label>
+        </div>
+        <span className="subtle small-note">{t("reg.schedHint")}</span>
+        {!locked && !validTimes && <p className="form-warn">{t("reg.badTimes")}</p>}
+      </div>
+
       {!locked && age !== "" && !validAge && (
         <p className="form-warn">{t("reg.ageHint", { min: MIN_AGE_DAYS, max: MAX_AGE_DAYS })}</p>
       )}
@@ -499,6 +543,7 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
       ) : confirming ? (
         <div className="confirm-box">
           <strong>{t("reg.confirm", { n: count, age: ageN })}</strong>
+          <span>{t("reg.confirmSched", { am: formatHHMM(amTime), pm: formatHHMM(pmTime) })}</span>
           <span className="subtle">{t("reg.confirmText")}</span>
           <div className="form-actions">
             <button type="button" className="btn btn-ghost" onClick={() => setConfirming(false)}>
@@ -514,7 +559,7 @@ function RegisterPigs({ pen, schedule, canEdit, uid }) {
         <button
           type="button"
           className="btn btn-primary btn-big"
-          disabled={locked || !validAge}
+          disabled={locked || !validAge || !validTimes}
           onClick={() => setConfirming(true)}
         >
           <Icon name="plus" size={18} />

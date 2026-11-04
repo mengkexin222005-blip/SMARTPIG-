@@ -99,6 +99,7 @@ unsigned long gSensorOkAt = 0;
 bool gRtcOk = false;
 uint32_t gPenSig = 0;                // which pig batch the saved age belongs to
 unsigned long gLastManualAt = 0;
+int16_t gRanHM[2] = {-1, -1};          // AM / PM time (minutes) that already ran on the day of S.lastMealKey
 bool gManualDone = false;
 unsigned long tPublish = 0, tRtcSync = 0, tRtcDaily = 0;
 bool gRtcSyncedOnce = false;
@@ -484,7 +485,11 @@ FeedResult dispenseFeed(float need) {
 void runMeal(int idx, int32_t key, bool manual) {
   DateTime now = rtc.now();
   WebConfig c = cloudGetConfig();
-  if (!manual) { S.lastMealKey = key; saveState(); }
+  if (!manual) {
+    S.lastMealKey = key; saveState();
+    gRanHM[idx] = S.mealH[idx] * 60 + S.mealM[idx];          // this slot's time that has now run today
+    prefs.putShort(idx == 0 ? "ranHM0" : "ranHM1", gRanHM[idx]);
+  }
   gState = "MEAL";
 
   FeedRecord rec = {};
@@ -495,15 +500,12 @@ void runMeal(int idx, int32_t key, bool manual) {
   }
   rec.scheduled = true;
 
-  // 1) leftover feed = live tray reading right before the meal
+  // 1) leftover feed = live tray reading right before the meal.
+  // Tray load cell not ready / not connected, or reading 0 -> counted as "no leftover", feeding goes on.
   float tray = readTray(15);
   if (isnan(tray)) {
-    gState = "TRAYERR";
-    fillStart(rec);
-    rec.ok = false; strlcpy(rec.error, "TRAY_SENSOR_ERR", sizeof(rec.error));
-    rec.trayAfter = NAN;
-    cloudQueueFeed(rec);
-    return;
+    Serial.println("[feed] Tray load cell not ready: counted as no leftover (0 g).");
+    tray = 0;
   }
   if (tray < 0) tray = 0;
   gTray = tray;
@@ -716,6 +718,8 @@ void setup() {
 
   loadState();
   loadPigs();
+  gRanHM[0] = prefs.getShort("ranHM0", -1);
+  gRanHM[1] = prefs.getShort("ranHM1", -1);
   gPenSig = prefs.getUInt("penSig", 0);
   if (S.baseDay == 0) { S.baseDay = rtc.now().unixtime() / 86400UL; saveState(); }
 
@@ -771,12 +775,20 @@ void loop() {
       Serial.println("[feed] Saved last-meal date is in the future (clock was changed): cleared.");
       S.lastMealKey = -1; saveState();
     }
-    static int32_t skipNoted = -1;
+    static int32_t skipNoted = -1, doneNoted = -1;
     for (int i = 0; i < 2; i++) {
       if (!cfg.slotOn[i]) continue;                       // website: AM / PM switch
       int sched = S.mealH[i] * 60 + S.mealM[i];
       int32_t key = (int32_t)dayIdx * 2 + i;
-      bool due = mins >= sched && mins < sched + MEAL_WINDOW_MIN && key > S.lastMealKey;
+      bool inWindow = mins >= sched && mins < sched + MEAL_WINDOW_MIN;
+      // Runs once per slot per day. If the time was changed on the website after it ran today,
+      // the new time runs too (gRanHM remembers which time already ran).
+      bool notYet = key > S.lastMealKey || (key == S.lastMealKey && gRanHM[i] != sched);
+      bool due = inWindow && notYet;
+      if (inWindow && !notYet && doneNoted != key) {
+        doneNoted = key;
+        Serial.printf("[feed] %s %02d:%02d already fed today.\n", i == 0 ? "AM" : "PM", S.mealH[i], S.mealM[i]);
+      }
       if (due && S.enabled) runMeal(i, key, false);
       else if (due && skipNoted != key) {                 // say once why a meal time was skipped
         skipNoted = key;

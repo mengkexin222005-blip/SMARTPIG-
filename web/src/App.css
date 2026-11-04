@@ -2974,3 +2974,6 @@ details.advanced:not([open]) { gap: 0; }
   .grid-3 > .metric-clock { grid-column: span 2; }
 }
 .sched-date { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; }
+.reg-times { display: flex; flex-wrap: wrap; gap: 10px; }
+.reg-time { display: inline-flex; align-items: center; gap: 8px; }
+.reg-time .sched-time-input { min-width: 0; }
