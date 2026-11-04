@@ -9,6 +9,7 @@ export const LANGS = [
 
 export const STRINGS = {
   en: {
+    "ov.climateTitle": "Temperature and humidity",
     "chart.outBelow": "{n} reading(s) below {limit} ({name}) · last at {time}",
     "chart.outAbove": "{n} reading(s) at or above {limit} ({name}) · last at {time}",
     "chart.allSafe": "All readings are within the safe limits.",
@@ -296,6 +297,8 @@ export const STRINGS = {
     "feed.amount": "Amount (grams)",
     "feed.button": "Feed now",
     "feed.confirm": "Feed now?",
+    "feed.confirmG": "Dispense {g} g now?",
+    "feed.amountHint": "From 10 g up to {max} g (Max per feeding).",
     "feed.yes": "Yes, feed",
     "feed.cancel": "Cancel",
     "feed.st.pending": "Sent. Waiting for the feeder…",
@@ -432,6 +435,7 @@ export const STRINGS = {
   },
 
   tl: {
+    "ov.climateTitle": "Temperatura at humidity",
     "chart.outBelow": "{n} reading na mas mababa sa {limit} ({name}) · huli noong {time}",
     "chart.outAbove": "{n} reading na {limit} pataas ({name}) · huli noong {time}",
     "chart.allSafe": "Lahat ng reading ay nasa ligtas na hangganan.",
@@ -719,6 +723,8 @@ export const STRINGS = {
     "feed.amount": "Dami (gramo)",
     "feed.button": "Magpakain ngayon",
     "feed.confirm": "Magpakain ngayon?",
+    "feed.confirmG": "Maglabas ng {g} g ngayon?",
+    "feed.amountHint": "Mula 10 g hanggang {max} g (Max bawat pakain).",
     "feed.yes": "Oo, magpakain",
     "feed.cancel": "Kanselahin",
     "feed.st.pending": "Naipadala. Hinihintay ang feeder…",

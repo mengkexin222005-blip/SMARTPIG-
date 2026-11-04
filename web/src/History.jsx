@@ -22,7 +22,7 @@ function Stats({ rows, field, unit, t }) {
 }
 
 // "3 readings at or above 30 °C (heat) · last at 2:10 PM", most serious first
-function LimitNotice({ rows, field, unit, limits, t, lang }) {
+export function LimitNotice({ rows, field, unit, limits, t, lang }) {
   const counts = new Map();
   for (const r of rows) {
     const v = validNumber(r, field);

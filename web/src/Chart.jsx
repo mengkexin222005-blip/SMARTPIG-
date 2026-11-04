@@ -72,6 +72,7 @@ export default function Chart({
   compact = false,
   label,
   limits = [],
+  area = false,
 }) {
   const [wrapRef, width] = useWidth();
   const [hover, setHover] = useState(null);
@@ -134,7 +135,26 @@ export default function Chart({
     penDown = true;
   }
 
-  // Area under the line (subtle), only for continuous stretches
+  // Area under the line (soft gradient), only for continuous stretches
+  let areaD = "";
+  if (area) {
+    const base = (m.top + innerH).toFixed(1);
+    let run = [];
+    const flush = () => {
+      if (run.length > 1) {
+        areaD += `M${x(run[0].t).toFixed(1)} ${base} `;
+        for (const p of run) areaD += `L${x(p.t).toFixed(1)} ${y(p.v).toFixed(1)} `;
+        areaD += `L${x(run[run.length - 1].t).toFixed(1)} ${base} Z `;
+      }
+      run = [];
+    };
+    for (const p of points) {
+      if (p.v === null) flush();
+      else run.push(p);
+    }
+    flush();
+  }
+  const gradId = `chart-fill-${tone}-${compact ? "s" : "l"}`;
   const last = valid[valid.length - 1];
 
   // 3–4 time labels along the bottom
@@ -231,6 +251,17 @@ export default function Chart({
             </g>
           ))}
 
+          {area && (
+            <>
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" className="chart-fill-top" />
+                  <stop offset="100%" className="chart-fill-bottom" />
+                </linearGradient>
+              </defs>
+              <path className="chart-area" d={areaD} fill={`url(#${gradId})`} />
+            </>
+          )}
           <path className="chart-line" d={d} />
 
           {/* Readings outside the safe limits */}

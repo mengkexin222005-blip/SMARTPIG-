@@ -5,7 +5,7 @@
     "users": {
       ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')",
       "$uid": {
-        ".write": "auth != null && auth.uid !== 'vP6dpAwKIPexvhLpD584qgD23Og1' && $uid !== 'vP6dpAwKIPexvhLpD584qgD23Og1' && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')",
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')",
         ".validate": "newData.hasChildren(['email', 'role'])",
         "name": {
           ".validate": "newData.isString() && newData.val().length <= 80"
@@ -39,7 +39,7 @@
     },
     "smartpig": {
       ".read": true,
-      ".write": "auth != null && auth.uid === 'vP6dpAwKIPexvhLpD584qgD23Og1'",
+      ".write": "auth != null && auth.uid === 'v7S2uykHwAdzgGWlKV5bA49XK4F2'",
       ".validate": "newData.hasChildren(['lastUpdated', 'sensorOk', 'waterLevel'])",
       "temperature": {
         ".validate": "newData.isNumber() && newData.val() >= -40 && newData.val() <= 125"
@@ -120,7 +120,7 @@
         "recordedAt"
       ],
       "$recordId": {
-        ".write": "auth != null && auth.uid === 'vP6dpAwKIPexvhLpD584qgD23Og1' && !data.exists()",
+        ".write": "auth != null && auth.uid === 'v7S2uykHwAdzgGWlKV5bA49XK4F2' && !data.exists()",
         ".validate": "newData.hasChildren(['recordedAt', 'deviceId', 'schemaVersion', 'sensorOk', 'waterLevel'])",
         "recordedAt": {
           ".validate": "newData.val() === now"
@@ -250,7 +250,7 @@
         ".validate": "newData.isNumber()"
       },
       "deviceAck": {
-        ".write": "auth != null && auth.uid === 'vP6dpAwKIPexvhLpD584qgD23Og1'",
+        ".write": "auth != null && auth.uid === 'v7S2uykHwAdzgGWlKV5bA49XK4F2'",
         ".validate": "newData.isNumber()"
       },
       "$other": {
@@ -319,7 +319,7 @@
     "smartpigCommands": {
       ".read": true,
       "feedNow": {
-        ".write": "auth != null && ((auth.uid === 'vP6dpAwKIPexvhLpD584qgD23Og1' && newData.child('status').val().matches(/^(running|done|failed)$/)) || ((root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user') && newData.child('status').val().matches(/^(pending|cancelled)$/)))",
+        ".write": "auth != null && ((auth.uid === 'v7S2uykHwAdzgGWlKV5bA49XK4F2' && newData.child('status').val().matches(/^(running|done|failed)$/)) || ((root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user') && newData.child('status').val().matches(/^(pending|cancelled)$/)))",
         ".validate": "newData.hasChildren(['id', 'grams', 'status', 'requestedAt'])",
         "id": {
           ".validate": "newData.isString() && newData.val().length <= 40"
@@ -362,7 +362,7 @@
         "startedAt"
       ],
       "$id": {
-        ".write": "auth != null && auth.uid === 'vP6dpAwKIPexvhLpD584qgD23Og1'",
+        ".write": "auth != null && auth.uid === 'v7S2uykHwAdzgGWlKV5bA49XK4F2'",
         ".validate": "newData.hasChildren(['source', 'startedAt', 'targetGrams'])",
         "source": {
           ".validate": "newData.isString() && newData.val().matches(/^(schedule|manual)$/)"

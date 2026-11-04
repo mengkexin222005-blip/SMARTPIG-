@@ -33,7 +33,7 @@ import { dateLocale } from "./i18n";
 /* Feed now                                                           */
 /* ------------------------------------------------------------------ */
 
-function FeedNow({ uid, device, settings, defaultGrams, log }) {
+function FeedNow({ uid, device, settings, defaultGrams }) {
   const { t } = useSettings();
   const cmd = useFeedCommand();
   const [manualEnabled, setManualEnabled] = useState(true);
@@ -42,16 +42,12 @@ function FeedNow({ uid, device, settings, defaultGrams, log }) {
   const [busy, setBusy] = useState(false);
 
   const now = device.serverNow;
-  const g = Math.round(defaultGrams || 300);
-
-  // Cooldown: last manual feeding in the log, or the last command
-  const lastManual = log.find((r) => r.source === "manual");
-  const lastManualAt = Math.max(
-    (lastManual && lastManual.startedAt) || 0,
-    (cmd && cmd.status !== "cancelled" && cmd.requestedAt) || 0
-  );
-  const cooldownMs = settings.manualCooldownMin * 60000;
-  const waitMin = Math.ceil((lastManualAt + cooldownMs - now) / 60000);
+  const maxG = Number(settings.maxGramsPerFeed) || 0;
+  // Amount box: starts at the next meal's amount until the user types their own
+  const [amount, setAmount] = useState("");
+  const [touched, setTouched] = useState(false);
+  const shown = touched ? amount : String(Math.round(defaultGrams || 300));
+  const g = Math.round(Number(shown));
 
   let state = null;
   if (cmd) {
@@ -63,8 +59,7 @@ function FeedNow({ uid, device, settings, defaultGrams, log }) {
 
   function validate() {
     if (!Number.isFinite(g) || g < 10) return t("feed.tooLittle");
-    if (g > settings.maxGramsPerFeed) return t("feed.tooMuch", { g: settings.maxGramsPerFeed });
-    if (waitMin > 0 && !active) return t("feed.cooldown", { m: waitMin });
+    if (maxG > 0 && g > maxG) return t("feed.tooMuch", { g: maxG });
     return "";
   }
 
@@ -131,6 +126,31 @@ function FeedNow({ uid, device, settings, defaultGrams, log }) {
         </div>
       )}
 
+      <div className="field">
+        <label htmlFor="feed-grams">{t("feed.amount")}</label>
+        <div className="grams-input">
+          <input
+            id="feed-grams"
+            type="number"
+            inputMode="numeric"
+            min="10"
+            max={maxG > 0 ? maxG : undefined}
+            step="1"
+            value={shown}
+            disabled={!manualEnabled || active || confirming}
+            onChange={(e) => {
+              setTouched(true);
+              setAmount(e.target.value);
+              setError("");
+            }}
+          />
+          <span>g</span>
+        </div>
+        <span className="subtle small-note">
+          {maxG > 0 ? t("feed.amountHint", { max: maxG }) : t("feed.tooLittle")}
+        </span>
+      </div>
+
       {!confirming ? (
         <button
           type="button"
@@ -147,7 +167,7 @@ function FeedNow({ uid, device, settings, defaultGrams, log }) {
         </button>
       ) : (
         <div className="confirm-box">
-          <strong>{t("feed.confirm")}</strong>
+          <strong>{t("feed.confirmG", { g })}</strong>
           <div className="form-actions">
             <button type="button" className="btn btn-ghost" onClick={() => setConfirming(false)}>
               {t("feed.cancel")}
@@ -631,7 +651,6 @@ const SETTING_FIELDS = [
   { key: "maxGramsPerFeed", label: "Max per feeding", unit: "g", help: "Safety cap for one feeding, scheduled or manual." },
   { key: "gramsPerSecond", label: "Motor speed", unit: "g/s", step: "0.1", help: "About how many grams the motor gives per second. Only used to size the safety stop; the hopper load cells decide when to stop." },
   { key: "motorTimeoutSec", label: "Motor timeout", unit: "s", help: "Stops the motor if the target isn't reached (jam or empty hopper)." },
-  { key: "manualCooldownMin", label: "Manual cooldown", unit: "min", help: "Minimum time between manual feedings." },
   { key: "aiEnabled", label: "AI feeding", type: "bool", help: "Random Forest + 5-day leftover rule fine-tune each scheduled feeding. Off = the plain amount (target minus what is left in the tray)." },
   { key: "aiStepPct", label: "AI step", unit: "%", help: "Change after 5 days (10 feedings) of empty or leftover trays. Limit ±20 %." },
   { key: "hopperLowGrams", label: "Hopper low alert", unit: "g", help: "Warn when the feed bin drops below this (needs the hopper load cell)." },
@@ -853,7 +872,7 @@ export default function Feeding({ uid, canEdit, signedIn, device, onSignIn }) {
       <div className="feed-second">
         <RegisteredPigs pen={pen} plan={plan} canEdit={canEdit} uid={uid} aiOn={!!settings.aiEnabled} />
         {canEdit ? (
-          <FeedNow uid={uid} device={device} settings={settings} defaultGrams={defaultGrams} log={rows} />
+          <FeedNow uid={uid} device={device} settings={settings} defaultGrams={defaultGrams} />
         ) : (
           <SignInToFeed signedIn={signedIn} />
         )}

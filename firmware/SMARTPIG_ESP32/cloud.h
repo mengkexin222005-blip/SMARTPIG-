@@ -5,7 +5,7 @@
 //
 // Reads : /smartpigConfig          pigs (age + count), AM/PM times, settings
 //         /smartpigCommands/feedNow "Feed now" from the website
-// Writes: /smartpig                 live readings every 5 s
+// Writes: /smartpig                 live readings twice a second (real time)
 //         /smartpigHistory          one record every 3 min (charts, tests)
 //         /smartpigFeedLog          one record per feeding (+ leftover later)
 //         /smartpigConfig/deviceAck "the feeder has the latest schedule"
@@ -17,12 +17,24 @@
 #include <Preferences.h>
 #include <esp_system.h>
 #include <sys/time.h>
-#include "secrets.h"
+// Wi-Fi and Firebase login come from config.h (WIFI_SSID, WIFI_PASS, FIREBASE_API_KEY,
+// FIREBASE_DB_HOST, DEVICE_EMAIL, DEVICE_PASSWORD). The device account must be the one the
+// database rules trust (UID vP6dp...), never a person's website account.
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD WIFI_PASS
+#endif
+#ifndef MAX_PIGS
+#ifdef PIGS_MAX
+#define MAX_PIGS PIGS_MAX
+#else
+#define MAX_PIGS 3
+#endif
+#endif
 
 #define HISTORY_SCHEMA_VERSION 2
 #define COMMAND_TTL_MS (2UL * 60UL * 1000UL)   // same as the website
 
-static const unsigned long SEND_INTERVAL_MS = 5000UL;
+static const unsigned long SEND_INTERVAL_MS = 500UL;    // live reading to the website twice a second (real time)
 static const unsigned long HISTORY_INTERVAL_MS = 180000UL;
 static const unsigned long TOKEN_REFRESH_MS = 50UL * 60UL * 1000UL;
 static const unsigned long CONFIG_POLL_MS = 60000UL;
@@ -250,7 +262,7 @@ static bool netWifi() {
   unsigned long t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) vTaskDelay(pdMS_TO_TICKS(500));
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[net] Wi-Fi failed. Check the name/password in secrets.h (2.4 GHz only). Will retry.");
+    Serial.println("[net] Wi-Fi failed. Check WIFI_SSID / WIFI_PASS in config.h (2.4 GHz only). Will retry.");
     return false;
   }
   Serial.print("[net] Wi-Fi connected. IP: ");
@@ -272,6 +284,7 @@ static bool netSignIn() {
   http.end();
   if (code != 200) {
     Serial.printf("[net] Sign-in failed. HTTP %d (check DEVICE_EMAIL / DEVICE_PASSWORD / API key)\n", code);
+    Serial.println(res);   // Firebase's reason, e.g. INVALID_LOGIN_CREDENTIALS
     return false;
   }
   JsonDocument d;
@@ -283,14 +296,27 @@ static bool netSignIn() {
   return true;
 }
 
+// One secure connection to the database is kept open and reused (keep-alive).
+// Opening a new HTTPS connection takes about 1 s on the ESP32; reusing it takes
+// about 0.1-0.3 s, which is what makes the live readings close to real time.
+static WiFiClientSecure dbClient;
+static HTTPClient dbHttp;
+static bool dbReady = false;
+
 static int fb(const char *method, const String &path, const String &body, String *response) {
-  WiFiClientSecure client; client.setInsecure();
-  HTTPClient http; http.setConnectTimeout(5000); http.setTimeout(8000);
-  http.begin(client, String("https://") + FIREBASE_DB_HOST + path + "?auth=" + idToken);
-  http.addHeader("Content-Type", "application/json");
-  int code = http.sendRequest(method, body);
-  String res = http.getString();
-  http.end();
+  if (!dbReady) {
+    dbClient.setInsecure();
+    dbHttp.setReuse(true);
+    dbHttp.setConnectTimeout(5000);
+    dbHttp.setTimeout(8000);
+    dbReady = true;
+  }
+  dbHttp.begin(dbClient, String("https://") + FIREBASE_DB_HOST + path + "?auth=" + idToken);
+  dbHttp.addHeader("Content-Type", "application/json");
+  int code = dbHttp.sendRequest(method, body);
+  String res = code > 0 ? dbHttp.getString() : String();
+  dbHttp.end();                       // keeps the connection open for the next request
+  if (code <= 0) dbClient.stop();     // broken connection: open a fresh one next time
   if (code == 401) { idToken = ""; netSignedIn = false; }
   if (code != 200) {
     Serial.printf("[net] %s %s -> HTTP %d %s\n", method, path.c_str(), code, res.c_str());
@@ -526,7 +552,7 @@ static void cloudTask(void *) {
         }
       }
     }
-    vTaskDelay(pdMS_TO_TICKS(200));
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 

@@ -55,7 +55,8 @@ export default function Login({ onBack }) {
   const { t } = useSettings();
   const innerRef = useRef(null);
   const [scale, setScale] = useState(1);
-  const [mode, setMode] = useState("signin"); // "signin" | "signup"
+  // Sign-up is turned off on the website: new accounts are added in the Firebase console
+  const [mode] = useState("signin");
   const isSignUp = mode === "signup";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -266,20 +267,6 @@ export default function Login({ onBack }) {
             )}
           </button>
 
-          <p className="lp-foot">
-            {isSignUp ? t("signup.haveAccount") : t("login.newHere")}{" "}
-            <button
-              type="button"
-              className="lp-link"
-              onClick={() => {
-                setMode(isSignUp ? "signin" : "signup");
-                setError("");
-                setNotice("");
-              }}
-            >
-              {isSignUp ? t("signup.toSignIn") : t("login.createAccount")}
-            </button>
-          </p>
         </form>
 
         <ul className="lp-pills">

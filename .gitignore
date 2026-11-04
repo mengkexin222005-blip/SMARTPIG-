@@ -1,5 +1,6 @@
 # never upload these
 secrets.h
+config.h
 .env
 .env.local
 .env.*.local

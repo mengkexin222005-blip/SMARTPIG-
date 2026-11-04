@@ -1968,7 +1968,8 @@ details.advanced:not([open]) { gap: 0; }
   .topbar-right .icon-btn { width: 26px; }
 }
 
-.topbar-signin { min-height: 40px; }
+.topbar-signin { min-height: 34px; padding: 0 14px; font-size: 0.875rem; gap: 6px; border-radius: 10px; }
+.topbar-signin .icon { width: 14px; height: 14px; }
 
 /* Sidebar for visitors */
 .side-signin {
@@ -2932,3 +2933,32 @@ details.advanced:not([open]) { gap: 0; }
 .chart-notice-ok { background: var(--ok-soft); color: var(--ok); }
 .chart-notice-warn { background: var(--amber-soft); color: var(--amber); }
 .chart-notice-bad { background: var(--red-soft); color: var(--red); }
+
+/* Overview: temperature + humidity graph */
+.climate { display: flex; flex-direction: column; gap: 14px; }
+.climate-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 900px) { .climate-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.climate-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+.climate-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.climate-title { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; }
+.climate-title .metric-ico { width: 30px; height: 30px; border-radius: 9px; }
+.climate-latest { font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; color: var(--text); }
+.climate-empty { margin: 0; }
+.climate-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.climate-stats div { padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.climate-stats dt { font-size: 0.75rem; font-weight: 700; color: var(--muted); }
+.climate-stats dd { margin: 2px 0 0; font-weight: 700; font-size: 0.9375rem; }
+.climate .chart-notice { margin-top: 0; }
+.chart-area { stroke: none; }
+.chart-fill-top { stop-color: var(--series); stop-opacity: 0.28; }
+.chart-fill-bottom { stop-color: var(--series); stop-opacity: 0; }
+:root[data-theme="dark"] .chart-fill-top { stop-opacity: 0.35; }

@@ -2,6 +2,7 @@ import Icon from "./icons";
 import Chart, { tempLimits, humLimits } from "./Chart";
 import { useSettings } from "./settings";
 import { useHistory, validNumber } from "./historyData";
+import { LimitNotice } from "./History";
 import { TroughRim } from "./Login";
 import { useFeedingConfig, useFeedLog, nextFeeding, formatHHMM, climateLimits } from "./feedingData";
 import {
@@ -16,6 +17,50 @@ import {
 
 function Skeleton({ w = "60%", h = 34 }) {
   return <span className="skeleton" style={{ width: w, height: h }} aria-hidden="true" />;
+}
+
+// Big temperature / humidity graph on the Overview (last ~6 h of history records)
+const CLIMATE_RECORDS = 120;
+
+function ClimatePanel({ title, icon, kind, rows, field, unit, limits, t, lang }) {
+  const vals = rows.map((r) => validNumber(r, field)).filter((v) => v !== null);
+  const latest = vals.length ? vals[vals.length - 1] : null;
+  const fmt = (v) => `${v.toFixed(1)}${unit === "%" ? " %" : ` ${unit}`}`;
+  const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  return (
+    <div className={`climate-panel climate-${kind}`}>
+      <div className="climate-head">
+        <span className="climate-title">
+          <span className={`metric-ico metric-ico-${kind}`}><Icon name={icon} size={16} /></span>
+          {title}
+        </span>
+        {latest !== null && <span className="climate-latest">{fmt(latest)}</span>}
+      </div>
+      {vals.length < 2 ? (
+        <p className="subtle climate-empty">{t("hist.notEnough")}</p>
+      ) : (
+        <>
+          <Chart
+            rows={rows}
+            field={field}
+            unit={unit}
+            tone={kind}
+            lang={lang}
+            height={190}
+            area
+            limits={limits}
+            label={title}
+          />
+          <dl className="climate-stats">
+            <div><dt>{t("hist.min")}</dt><dd>{fmt(Math.min(...vals))}</dd></div>
+            <div><dt>{t("hist.avg")}</dt><dd>{fmt(avg)}</dd></div>
+            <div><dt>{t("hist.max")}</dt><dd>{fmt(Math.max(...vals))}</dd></div>
+          </dl>
+          <LimitNotice rows={rows} field={field} unit={unit} limits={limits} t={t} lang={lang} />
+        </>
+      )}
+    </div>
+  );
 }
 
 function Trend({ rows, field, unit, tone, lang, t, current, limits }) {
@@ -125,6 +170,7 @@ export default function Overview({ device, name, onOpenFeeding }) {
   const L = climateLimits(settings);
   const { rows: feedLog } = useFeedLog(1);
   const { rows } = useHistory();
+  const { rows: longRows, hasLoaded: histLoaded } = useHistory(CLIMATE_RECORDS);
   const {
     status, tone, isStale, lastUpdated, ageMs, hasLoaded,
     temperature, humidity, waterLevel, alerts,
@@ -287,6 +333,36 @@ export default function Overview({ device, name, onOpenFeeding }) {
       </div>
 
       {/* Feeding */}
+      {/* Temperature and humidity over the last hours */}
+      <section className="card climate" aria-labelledby="climate-title">
+        <div className="card-head">
+          <span className="card-label" id="climate-title"><Icon name="chart" size={16} />{t("ov.climateTitle")}</span>
+          {longRows.length > 1 && (
+            <span className="subtle small-note">
+              {t("time.lastSpan", {
+                span: formatSpan(longRows[longRows.length - 1].recordedAt - longRows[0].recordedAt, lang),
+              })}
+            </span>
+          )}
+        </div>
+        {!histLoaded ? (
+          <span className="skeleton" style={{ height: 220 }} />
+        ) : longRows.length === 0 ? (
+          <p className="subtle">{t("hist.none")}</p>
+        ) : (
+          <div className="climate-grid">
+            <ClimatePanel
+              title={t("ov.temperature")} icon="temp" kind="temp" rows={longRows}
+              field="temperature" unit="°C" limits={tempLimits(L, t)} t={t} lang={lang}
+            />
+            <ClimatePanel
+              title={t("ov.humidity")} icon="drop" kind="hum" rows={longRows}
+              field="humidity" unit="%" limits={humLimits(L, t)} t={t} lang={lang}
+            />
+          </div>
+        )}
+      </section>
+
       <section className="card feed-summary">
         <div className="card-head">
           <span className="card-label"><Icon name="bowl" size={16} />{t("ov.feeding")}</span>
