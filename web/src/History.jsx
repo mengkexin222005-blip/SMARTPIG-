@@ -1,152 +1,183 @@
-import { useEffect, useState } from "react";
-import { subscribeToHistory } from "./dataService";
+import Chart, { tempLimits, humLimits, brokenLimit } from "./Chart";
+import { useFeedingConfig, climateLimits } from "./feedingData";
+import Icon from "./icons";
+import { useSettings } from "./settings";
+import { useHistory, validNumber, RECORD_COUNT } from "./historyData";
+import { formatClock, waterLabel } from "./deviceData";
 
-const NO_DATA = "No data";
-const RECORD_COUNT = 60;
-
-function formatTime(ms) {
-  return new Intl.DateTimeFormat("en-PH", {
-    timeZone: "Asia/Manila",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(new Date(ms));
-}
-
-function validNumber(row, field) {
-  return row.sensorOk === true && typeof row[field] === "number"
-    ? row[field]
-    : null;
-}
-
-function LineChart({ title, unit, rows, field }) {
-  const points = rows.map((r) => validNumber(r, field));
-  const values = points.filter((v) => v !== null);
-
-  if (values.length < 2) {
-    return (
-      <div className="chart">
-        <h3>{title}</h3>
-        <p className="small">Not enough data yet</p>
-      </div>
-    );
-  }
-
-  let min = Math.min(...values);
-  let max = Math.max(...values);
-  if (min === max) {
-    min -= 1;
-    max += 1;
-  }
-
-  const W = 340;
-  const H = 110;
-  const x = (i) => (i / (points.length - 1)) * W;
-  const y = (v) => H - ((v - min) / (max - min)) * H;
-
-  // A failed reading breaks the line instead of being drawn as zero
-  let d = "";
-  let penDown = false;
-  points.forEach((v, i) => {
-    if (v === null) {
-      penDown = false;
-      return;
-    }
-    d += `${penDown ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)} `;
-    penDown = true;
-  });
-
-  const latest = values[values.length - 1];
-
+function Stats({ rows, field, unit, t }) {
+  const values = rows.map((r) => validNumber(r, field)).filter((v) => v !== null);
+  if (values.length === 0) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  const fmt = (v) => `${v.toFixed(1)} ${unit}`;
   return (
-    <div className="chart">
-      <h3>{title}</h3>
-      <svg viewBox={`-4 -4 ${W + 8} ${H + 8}`} className="chart-svg">
-        <path d={d} fill="none" stroke="#0b5fff" strokeWidth="2" />
-      </svg>
-      <p className="small">
-        Min {min.toFixed(1)} {unit} · Max {max.toFixed(1)} {unit} · Latest{" "}
-        {latest.toFixed(1)} {unit}
+    <dl className="stats">
+      <div><dt>{t("hist.min")}</dt><dd>{fmt(min)}</dd></div>
+      <div><dt>{t("hist.avg")}</dt><dd>{fmt(avg)}</dd></div>
+      <div><dt>{t("hist.max")}</dt><dd>{fmt(max)}</dd></div>
+    </dl>
+  );
+}
+
+// "3 readings at or above 30 °C (heat) · last at 2:10 PM", most serious first
+function LimitNotice({ rows, field, unit, limits, t, lang }) {
+  const counts = new Map();
+  for (const r of rows) {
+    const v = validNumber(r, field);
+    if (v === null) continue;
+    const hit = brokenLimit(v, limits);
+    if (!hit) continue;
+    const c = counts.get(hit) || { n: 0, last: 0 };
+    c.n += 1;
+    c.last = Math.max(c.last, r.recordedAt || 0);
+    counts.set(hit, c);
+  }
+  const u = unit === "%" ? "%" : ` ${unit}`;
+  if (counts.size === 0) {
+    return <p className="chart-notice chart-notice-ok"><Icon name="check" size={16} />{t("chart.allSafe")}</p>;
+  }
+  return [...counts.entries()]
+    .sort(([a], [b]) => (a.tone === "bad" ? -1 : 0) - (b.tone === "bad" ? -1 : 0))
+    .map(([l, c]) => (
+      <p key={`${l.side}${l.value}`} className={`chart-notice chart-notice-${l.tone}`}>
+        <Icon name="warn" size={16} />
+        {t(l.side === "above" ? "chart.outAbove" : "chart.outBelow", {
+          n: c.n,
+          limit: `${l.value}${u}`,
+          name: l.label.toLowerCase(),
+          time: c.last ? formatClock(c.last, lang) : "—",
+        })}
       </p>
-    </div>
+    ));
+}
+
+function ChartCard({ title, icon, rows, field, unit, tone, t, lang, limits }) {
+  const values = rows.map((r) => validNumber(r, field)).filter((v) => v !== null);
+  const latest = values.length ? values[values.length - 1] : null;
+  return (
+    <section className="card chart-card">
+      <div className="chart-head">
+        <span className="card-label"><Icon name={icon} size={16} />{title}</span>
+        {latest !== null && (
+          <span className="chart-latest">
+            {latest.toFixed(1)}
+            <span className="unit"> {unit}</span>
+          </span>
+        )}
+      </div>
+      {values.length < 2 ? (
+        <p className="subtle">{t("hist.notEnough")}</p>
+      ) : (
+        <>
+          <Chart
+            rows={rows}
+            field={field}
+            unit={unit}
+            tone={tone}
+            lang={lang}
+            height={200}
+            label={`${title}, ${t("hist.lastN", { n: rows.length })}`}
+            limits={limits}
+          />
+          <LimitNotice rows={rows} field={field} unit={unit} limits={limits} t={t} lang={lang} />
+          <Stats rows={rows} field={field} unit={unit} t={t} />
+        </>
+      )}
+    </section>
   );
 }
 
 export default function History() {
-  const [rows, setRows] = useState([]);
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const stop = subscribeToHistory(
-      RECORD_COUNT,
-      (data) => {
-        setRows(data);
-        setError(null);
-        setHasLoaded(true);
-      },
-      (err) => {
-        setError(err.message);
-        setHasLoaded(true);
-      }
-    );
-    return () => stop();
-  }, []);
-
+  const { t, lang } = useSettings();
+  const { rows, hasLoaded, error } = useHistory(RECORD_COUNT);
+  const { settings } = useFeedingConfig();
+  const L = climateLimits(settings);
   const newestFirst = [...rows].reverse().slice(0, 10);
 
+  if (error) {
+    return (
+      <section className="card">
+        <p className="error">{t("hist.error", { error })}</p>
+      </section>
+    );
+  }
+  if (!hasLoaded) {
+    return (
+      <div className="grid-2">
+        <section className="card"><span className="skeleton" style={{ height: 240 }} /></section>
+        <section className="card"><span className="skeleton" style={{ height: 240 }} /></section>
+      </div>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <section className="card">
+        <p className="subtle">{t("hist.none")}</p>
+      </section>
+    );
+  }
+
   return (
-    <section className="card">
-      <h2>History (last {RECORD_COUNT} records)</h2>
+    <>
+      <p className="subtle">
+        {t("hist.lastN", { n: rows.length })} · {t("hist.chartHint")}
+      </p>
+      <div className="grid-2">
+        <ChartCard
+          title={t("ov.temperature")}
+          icon="temp"
+          rows={rows}
+          field="temperature"
+          unit="°C"
+          tone="temp"
+          t={t}
+          lang={lang}
+          limits={tempLimits(L, t)}
+        />
+        <ChartCard
+          title={t("ov.humidity")}
+          icon="drop"
+          rows={rows}
+          field="humidity"
+          unit="%"
+          tone="hum"
+          t={t}
+          lang={lang}
+          limits={humLimits(L, t)}
+        />
+      </div>
 
-      {error && <p className="error">History error: {error}</p>}
-      {!hasLoaded && <p className="small">Loading...</p>}
-      {hasLoaded && !error && rows.length === 0 && (
-        <p className="small">No history records yet.</p>
-      )}
-
-      {rows.length > 0 && (
-        <>
-          <LineChart
-            title="Temperature"
-            unit="°C"
-            rows={rows}
-            field="temperature"
-          />
-          <LineChart
-            title="Humidity"
-            unit="%"
-            rows={rows}
-            field="humidity"
-          />
-
-          <h3>Latest 10 records</h3>
-          <table className="table">
+      <section className="card">
+        <span className="card-label">{t("hist.latest10")}</span>
+        <div className="table-wrap">
+          <table className="table history-table">
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Temp</th>
-                <th>Hum</th>
-                <th>Water</th>
+                <th scope="col">{t("hist.time")}</th>
+                <th scope="col" className="num">{t("hist.temp")}</th>
+                <th scope="col" className="num">{t("hist.hum")}</th>
+                <th scope="col">{t("hist.water")}</th>
               </tr>
             </thead>
             <tbody>
               {newestFirst.map((r) => {
-                const t = validNumber(r, "temperature");
-                const h = validNumber(r, "humidity");
+                const temp = validNumber(r, "temperature");
+                const hum = validNumber(r, "humidity");
                 return (
                   <tr key={r.id}>
-                    <td>{formatTime(r.recordedAt)}</td>
-                    <td>{t !== null ? `${t.toFixed(1)} °C` : NO_DATA}</td>
-                    <td>{h !== null ? `${h.toFixed(1)} %` : NO_DATA}</td>
-                    <td>{r.waterLevel || NO_DATA}</td>
+                    <td>{formatClock(r.recordedAt, lang)}</td>
+                    <td className="num">{temp !== null ? `${temp.toFixed(1)} °C` : t("ov.noData")}</td>
+                    <td className="num">{hum !== null ? `${hum.toFixed(1)} %` : t("ov.noData")}</td>
+                    <td>{r.waterLevel ? waterLabel(r.waterLevel, lang) : t("ov.noData")}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-        </>
-      )}
-    </section>
+        </div>
+      </section>
+    </>
   );
 }

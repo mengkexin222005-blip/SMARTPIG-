@@ -1,0 +1,15 @@
+{
+  "name": "SmartPig",
+  "short_name": "SmartPig",
+  "description": "Automated feeding and pen monitoring for small-scale hog farms.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#EEF8F2",
+  "theme_color": "#1F5C3D",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

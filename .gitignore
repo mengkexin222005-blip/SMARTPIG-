@@ -1,0 +1,9 @@
+# never upload these
+secrets.h
+.env
+.env.local
+.env.*.local
+
+# build output
+node_modules/
+dist/

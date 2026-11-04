@@ -1,7 +1,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <RTClib.h>
-#include "firebase_uploader.h"   // ADDED: Wi-Fi + Firebase (runs in its own task)
+#include "firebase_uploader.h"   // ADDED: Wi-Fi + Firebase (runs in its own task), includes feeder.h
 
 // LCD and RTC pins
 #define I2C_SDA_PIN 8
@@ -12,9 +12,11 @@
 #define RS485_TX_PIN 4
 
 // Water level pins
-#define TOP_FLOAT_PIN 13
-#define MIDDLE_FLOAT_PIN 14
-#define BOTTOM_FLOAT_PIN 15
+// CHANGED: 13, 14 and 15 are now used by the HX711 (H1 CLK) and the motor driver (RPWM, LPWM)
+// in the schematic. Move the three float switches to these free pins (other wire to GND).
+#define TOP_FLOAT_PIN 38
+#define MIDDLE_FLOAT_PIN 39
+#define BOTTOM_FLOAT_PIN 40
 
 // Modbus settings
 #define SENSOR_ADDRESS 1
@@ -237,6 +239,66 @@ void displayDate() {
   printLCDLine(1, "Lvl: " + waterStatus);
 }
 
+// NEW: hopper and tray weights
+void displayWeights() {
+  float g;
+  char line[17];
+  if (hopperGrams(g)) snprintf(line, sizeof(line), "Hopper: %.0f g", g);
+  else snprintf(line, sizeof(line), "Hopper: --");
+  printLCDLine(0, String(line));
+  if (trayGrams(g)) snprintf(line, sizeof(line), "Tray: %.0f g", g);
+  else snprintf(line, sizeof(line), "Tray: --");
+  printLCDLine(1, String(line));
+}
+
+// NEW: shows the feeding on the LCD while the motor runs
+void displayFeeding() {
+  char line[17];
+  snprintf(line, sizeof(line), "Target: %.0f g", feederCurrentTarget());
+  printLCDLine(0, "FEEDING...");
+  printLCDLine(1, String(line));
+}
+
+// NEW: reads the RTC once and says whether the time can be trusted
+bool readRtc(DateTime &now) {
+  if (!rtcOK || rtc.lostPower()) return false;
+  now = rtc.now();
+  return now.year() >= 2025 && now.year() <= 2099;
+}
+
+// NEW: keeps the DS3231 on Philippine time using internet time (NTP).
+// - If the clock lost its time (battery removed, power cut), it is set right away.
+// - Otherwise it is corrected once a day if it drifted more than 2 seconds.
+// Scheduled feeding still runs from the DS3231 when there is no internet.
+#define PH_OFFSET_SEC (8UL * 3600UL)   // Philippines = UTC+8
+unsigned long lastRtcCheck = 0;
+unsigned long lastRtcSync = 0;
+bool rtcSyncedOnce = false;
+
+void syncRtcFromInternet() {
+  if (!rtcOK) return;
+  if (millis() - lastRtcCheck < 60000UL && lastRtcCheck != 0) return;   // check once a minute
+  lastRtcCheck = millis();
+
+  uint64_t ms = epochMs();             // 0 until the ESP32 has internet time
+  if (ms == 0) return;
+  uint32_t phNow = (uint32_t)(ms / 1000ULL) + PH_OFFSET_SEC;
+
+  DateTime rtcTime = rtc.now();
+  bool invalid = rtc.lostPower() || rtcTime.year() < 2025 || rtcTime.year() > 2099;
+  long drift = (long)rtcTime.unixtime() - (long)phNow;
+  bool dailyCheck = !rtcSyncedOnce || millis() - lastRtcSync > 86400000UL;
+
+  if (invalid || (dailyCheck && labs(drift) > 2)) {
+    rtc.adjust(DateTime(phNow));
+    Serial.printf("[rtc] Clock set from internet time (was off by %ld s).\n", invalid ? 0L : drift);
+  }
+  if (invalid || dailyCheck) {
+    rtcSyncedOnce = true;
+    lastRtcSync = millis();
+  }
+}
+
 // ADDED: hands the latest real readings to the Firebase task
 void publishSnapshot() {
   // Raw float states, read right after readWaterLevel()
@@ -266,6 +328,9 @@ void publishSnapshot() {
 
 void setup() {
   Serial.begin(115200);
+
+  feederBegin();   // NEW: motor off right away, load the saved schedule
+  scalesBegin();   // NEW: hopper + tray load cells
 
   // Initialize I2C for both LCD and RTC
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
@@ -316,6 +381,23 @@ void loop() {
   // Update water level continuously
   readWaterLevel();
 
+  // NEW: load cells, Serial Monitor calibration commands, feeding
+  scalesLoop();
+  scalesHandleSerial();
+
+  syncRtcFromInternet();   // NEW: fixes the clock if it lost its time
+
+  DateTime rtcNow;
+  bool rtcValid = readRtc(rtcNow);
+  feederLoop(rtcNow, rtcValid);
+
+  // While the motor runs, skip the slow sensor read so the stop time stays accurate
+  if (feederIsFeeding()) {
+    displayFeeding();
+    delay(20);
+    return;
+  }
+
   // Read sensor every 2 seconds
   if (currentMillis - lastSensorRead >= 2000) {
     lastSensorRead = currentMillis;
@@ -328,7 +410,7 @@ void loop() {
 
     displayPage++;
 
-    if (displayPage > 2) {
+    if (displayPage > 3) {   // CHANGED: 4 pages (weights added)
       displayPage = 0;
     }
   }
@@ -338,8 +420,10 @@ void loop() {
     displayWaterAndTime();
   } else if (displayPage == 1) {
     displaySensorData();
-  } else {
+  } else if (displayPage == 2) {
     displayDate();
+  } else {
+    displayWeights();
   }
 
   publishSnapshot();   // ADDED: share the latest readings with the network task

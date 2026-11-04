@@ -2,9 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="SmartPig: automated feeding and pen monitoring for small-scale hog farms." />
+    <meta name="theme-color" content="#EEF8F2" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SmartPig" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>SmartPig</title>
+    <script>
+      // Set light/dark before the page draws, so it doesn't flash white
+      try {
+        var s = JSON.parse(localStorage.getItem("smartpig.settings.v1") || "{}");
+        var dark = s.theme === "dark" ||
+          ((!s.theme || s.theme === "system") &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

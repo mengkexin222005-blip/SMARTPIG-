@@ -1,17 +1,156 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600;700;800&display=swap");
+
+/* ---------- Palette: "Earthly Serenade", lightened ----------
+   rust #C9441F · mint #E6F7EE · jade #8FCBB0 · forest #1F5C3D · ink #13261C
+   (from #BA2D0B · #D5F2E3 · #73BA9B · #003E1F · #01110A)
+   Forest leads, jade accents, mint grounds, rust for errors.
+   Orange (warnings) and teal (water) are the only extras. */
+
+/* ---------- Color tokens: light ---------- */
+:root {
+  color-scheme: light;
+  --bg: #eef8f2;
+  --surface: #fcfffd;
+  --surface-2: #f4fbf7;
+  --sunken: #e6f7ee;
+  --text: #13261c;
+  --muted: #44594d;
+  --faint: #536a5d;
+  --line: #d3ebdd;
+  --line-strong: #abcfbb;
+  --grid: #e3f2e9;
+
+  /* Main (forest) */
+  --green: #1f5c3d;
+  --green-strong: #174a31;
+  --green-soft: #e6f7ee;
+  --on-green: #ffffff;
+  /* Accent (jade) */
+  --gold: #8fcbb0;
+  --gold-text: #2e7556;
+  --gold-soft: #e6f7ee;
+
+  /* Status */
+  --ok: #2a7a55;
+  --ok-soft: #ddf3e7;
+  --red: #c9441f;
+  --red-soft: #fbeae3;
+  --amber: #96520a;
+  --amber-soft: #fdf0dc;
+  --blue: #2c6470;
+  --blue-soft: #e1f3f5;
+  --water: #4a9fb0;
+  --water-empty: #e3f2e9;
+
+  --line-temp: #c9441f;
+  --line-hum: #3e9474;
+
+  --brand-navy: #1f5c3d;
+  --brand-pink: #d23c5f;
+  --intro-bg: #1f5c3d;
+  --wash: rgba(238, 248, 242, 0.8);
+  --hero-bg: linear-gradient(120deg, #d6eefa 0%, #e8f6f3 55%, #e6f7ee 100%);
+  --font-display: Montserrat, "Open Sans", system-ui, sans-serif;
+
+  /* Sidebar: forest lightened 10% (#1F5C3D -> #356C50), mint highlight */
+  --side-bg: #356c50;
+  --side-text: #ffffff;
+  --side-muted: #e3f2ea;
+  --side-hover: #437a5e;
+  --side-active-bg: #e6f7ee;
+  --side-active-text: #1f5c3d;
+  --side-line: #4d8166;
+  --side-pink: #ffc2d0;
+
+  --radius: 16px;
+  --shadow: 0 1px 2px rgba(19, 38, 28, 0.06), 0 1px 1px rgba(19, 38, 28, 0.03);
+  --shadow-lift: 0 8px 22px rgba(19, 38, 28, 0.1);
+}
+
+/* ---------- Color tokens: dark (own values, not an inversion) ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #13261c;
+  --surface: #1a3125;
+  --surface-2: #1f382b;
+  --sunken: #254233;
+  --text: #eef8f2;
+  --muted: #b3cdbf;
+  --faint: #9dbaaa;
+  --line: #284536;
+  --line-strong: #3a5f4b;
+  --grid: #234030;
+
+  --green: #8fcbb0;
+  --green-strong: #a8d9c2;
+  --green-soft: #254a38;
+  --on-green: #13261c;
+  --gold: #8fcbb0;
+  --gold-text: #a8d9c2;
+  --gold-soft: #224434;
+
+  --ok: #8fcbb0;
+  --ok-soft: #224434;
+  --red: #f08a6b;
+  --red-soft: #45231a;
+  --amber: #f3b070;
+  --amber-soft: #3d2c16;
+  --blue: #9ad6e0;
+  --blue-soft: #1c3a40;
+  --water: #5db6c6;
+  --water-empty: #234030;
+
+  --line-temp: #f08a6b;
+  --line-hum: #8fcbb0;
+
+  --brand-navy: #eef8f2;
+  --brand-pink: #ff8fab;
+  --intro-bg: #1f5c3d;
+  --wash: rgba(15, 31, 23, 0.9);
+  --hero-bg: linear-gradient(120deg, #1c3a40 0%, #1b3529 60%, #1a3125 100%);
+
+  --side-bg: #0f1f17;
+  --side-text: #eef8f2;
+  --side-muted: #9dbaaa;
+  --side-hover: #1a3125;
+  --side-active-bg: #254a38;
+  --side-active-text: #a8d9c2;
+  --side-line: #1a3125;
+  --side-pink: #ff8fab;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-lift: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  background: #dfe3e8;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: #1b1f23;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Open Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 #root {
-  max-width: 430px;
   min-height: 100vh;
-  margin: 0 auto;
-  background: #f7f8fa;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
